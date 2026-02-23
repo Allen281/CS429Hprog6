@@ -105,7 +105,7 @@ void* tmalloc(size_t size, policy p) {
             fprintf(stderr, "Error: failed to allocate memory\n");
             exit(0);
         }
-        new_block->size = size;
+        new_block->size = aligned_size;
         new_block->is_free = false;
         new_block->next = NULL;
         
