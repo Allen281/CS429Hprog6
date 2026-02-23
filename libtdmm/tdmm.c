@@ -1,9 +1,17 @@
 #include "tdmm.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <inttypes.h>
+
+static header* headers_start;
+static header *headers_end;
+static size_t requested_size;
+static size_t total_size;
+static alloc_strat_e strategy;
+static long page_size;
 
 static header* find_free_block(size_t size) {
     header* current = headers_start;
@@ -105,6 +113,8 @@ void *t_malloc(size_t size) {
 }
 
 static void merge_blocks(header* block){
+    if((char*)block->next != (char*)block + sizeof(header) + block->size) return;
+    
     block->size += sizeof(header) + block->next->size;
     block->next = block->next->next;
 }
@@ -148,13 +158,8 @@ void t_free(void *ptr) {
     block->is_free = true;
     requested_size -= block->size;
     
-    if(block->next != NULL && block->next->is_free && (char*)block + sizeof(header) + block->size == (char*)block->next) {
         merge_blocks(block);
-    }
-    
-    if(prev != NULL && prev->is_free && (char*)prev + sizeof(header) + prev->size == (char*)block) {
         merge_blocks(prev);
-    } 
 }
 
 static void mark(uintptr_t* ptr) {
@@ -181,14 +186,17 @@ void t_gcollect(void) {
     uintptr_t* end = (uintptr_t*)stack_top;
     
     while(current < end) {
-        mark(current);
+        mark((uintptr_t*) *current);
         current++;
     }
     
     header* current_block = headers_start;
     while (current_block) {
         if (!current_block->is_free) {
-            if(!current_block->is_marked) current_block->is_free = true;
+            if(!current_block->is_marked){
+                current_block->is_free = true;
+                requested_size -= current_block->size;
+            }
             else current_block->is_marked = false;
         }
         current_block = current_block->next;
