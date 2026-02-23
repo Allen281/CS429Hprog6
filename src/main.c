@@ -30,13 +30,21 @@ void tfree(void* pointer);
 static allocator* alloc;
 
 static void init_alloc(){
-    alloc = mmap(NULL, sizeof(allocator), PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);   
+    alloc = mmap(NULL, sizeof(allocator), PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
+    alloc->headers_start = NULL;
+    alloc->headers_end = NULL;
+    alloc->requested_size = 0;
+    alloc->total_size = 0;
 }
 
 int main(int argc, char* argv[]){
     argc = argc;
     argv = argv;
     init_alloc();
+    
+    char* string = (char*)tmalloc(20, FIRST_FIT);
+    string = "Hello, World!";
+    printf("%s\n", string);
     
     return 0;
 }
