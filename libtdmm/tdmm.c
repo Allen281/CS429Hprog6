@@ -4,7 +4,12 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-static allocator* alloc;
+header* headers_start;
+header *headers_end;
+size_t requested_size;
+size_t total_size;
+alloc_strat_e strategy;
+long page_size;
 
 static header* find_free_block(size_t size) {
     header* current = headers_start;
@@ -50,6 +55,7 @@ void t_init(alloc_strat_e strat) {
     initial_block->size = page_size - sizeof(header);
     initial_block->is_free = true;
     initial_block->next = NULL;
+    
     headers_start = initial_block;
     headers_end = initial_block;
     requested_size = 0;
@@ -64,15 +70,17 @@ void *t_malloc(size_t size) {
     
     header* block = find_free_block(aligned_size);
     if(block == NULL) {
-        size_t size_needed = size + sizeof(header);
+        size_t size_needed = aligned_size + sizeof(header);
         size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
         header* new_block = mmap(NULL, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        
         if(new_block == NULL) {
             fprintf(stderr, "Error: failed to allocate memory\n");
             exit(0);
         }
+        
         new_block->size = allocation_size - sizeof(header);
-        new_block->is_free = false;
+        new_block->is_free = true;
         new_block->next = NULL;
         
         headers_end->next = new_block;
@@ -90,6 +98,8 @@ void *t_malloc(size_t size) {
         
         block->size = aligned_size;
         block->next = new_block;
+        
+        if(headers_end == block) headers_end = new_block;
     }
     
     block->is_free = false;
@@ -97,10 +107,13 @@ void *t_malloc(size_t size) {
     return (char*)block + sizeof(header);
 }
 
+static void merge_blocks(header* block){
+    block->size += sizeof(header) + block->next->size;
+    block->next = block->next->next;
+}
+
 void t_free(void *ptr) {
-   	if(ptr == NULL) {
-        return;
-    }
+   	if(ptr == NULL) return;
     
     header* current = headers_start;
     bool found = false;
@@ -128,17 +141,14 @@ void t_free(void *ptr) {
     
     header* block = (header*)((char*)ptr - sizeof(header));
     block->is_free = true;
-    
     requested_size -= block->size;
     
     if(block->next != NULL && block->next->is_free && (char*)block + sizeof(header) + block->size == (char*)block->next) {
-        block->size += sizeof(header) + block->next->size;
-        block->next = block->next->next;
+        merge_blocks(block);
     }
     
     if(prev != NULL && prev->is_free && (char*)prev + sizeof(header) + prev->size == (char*)block) {
-        prev->size += sizeof(header) + block->size;
-        prev->next = block->next;
+        merge_blocks(prev);
     } 
 }
 

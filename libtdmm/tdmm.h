@@ -19,12 +19,12 @@ typedef enum {
   WORST_FIT,
 } alloc_strat_e;
 
-static header* headers_start;
-static header *headers_end;
-static size_t requested_size;
-static size_t total_size;
-static alloc_strat_e strategy;
-static long page_size;
+extern header* headers_start;
+extern header *headers_end;
+extern size_t requested_size;
+extern size_t total_size;
+extern alloc_strat_e strategy;
+extern long page_size;
 
 /**
  * Initializes the memory allocator with the given strategy.
