@@ -3,13 +3,7 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
-
-header* headers_start;
-header *headers_end;
-size_t requested_size;
-size_t total_size;
-alloc_strat_e strategy;
-long page_size;
+#include <inttypes.h>
 
 static header* find_free_block(size_t size) {
     header* current = headers_start;
@@ -54,6 +48,7 @@ void t_init(alloc_strat_e strat) {
     
     initial_block->size = page_size - sizeof(header);
     initial_block->is_free = true;
+    initial_block->is_marked = false;
     initial_block->next = NULL;
     
     headers_start = initial_block;
@@ -81,6 +76,7 @@ void *t_malloc(size_t size) {
         
         new_block->size = allocation_size - sizeof(header);
         new_block->is_free = true;
+        new_block->is_marked = false;
         new_block->next = NULL;
         
         headers_end->next = new_block;
@@ -94,6 +90,7 @@ void *t_malloc(size_t size) {
         header* new_block = (header*)((char*)block + sizeof(header) + aligned_size);
         new_block->size = block->size - aligned_size - sizeof(header);
         new_block->is_free = true;
+        new_block->is_marked = false;
         new_block->next = block->next;
         
         block->size = aligned_size;
@@ -110,6 +107,14 @@ void *t_malloc(size_t size) {
 static void merge_blocks(header* block){
     block->size += sizeof(header) + block->next->size;
     block->next = block->next->next;
+}
+
+static void merge_free_blocks() {
+    header* current = headers_start;
+    while(current && current->next) {
+        if(current->is_free && current->next->is_free) merge_blocks(current);
+        else current = current->next;
+    }
 }
 
 void t_free(void *ptr) {
@@ -152,6 +157,49 @@ void t_free(void *ptr) {
     } 
 }
 
+static void mark(uintptr_t* ptr) {
+    header* current = headers_start;
+    while(current) {
+        uintptr_t block_start = (uintptr_t)((char*)current + sizeof(header));
+        uintptr_t block_end = block_start + current->size;
+        
+        if((uintptr_t)ptr >= block_start && (uintptr_t)ptr < block_end) {
+            current->is_marked = true;
+            break;
+        }
+        
+        current = current->next;
+    }
+}
+
+extern char **environ;
 void t_gcollect(void) {
-  	// TODO: Implement this
+    void* stack_bottom = __builtin_frame_address(0);
+    void* stack_top = environ;
+    
+    uintptr_t* current = (uintptr_t*)stack_bottom;
+    uintptr_t* end = (uintptr_t*)stack_top;
+    
+    while(current < end) {
+        mark(current);
+        current++;
+    }
+    
+    header* current_block = headers_start;
+    while (current_block) {
+        if (!current_block->is_free) {
+            if(!current_block->is_marked) current_block->is_free = true;
+            else current_block->is_marked = false;
+        }
+        current_block = current_block->next;
+    }
+    
+    merge_free_blocks();
+}
+
+void t_display_stats() {
+    printf("Page size: %zu\n", page_size);
+    printf("Requested size: %zu\n", requested_size);
+    printf("Total size: %zu\n", total_size);
+    printf("%% memory utilization: %.2f%%\n", (double)requested_size / total_size * 100);
 }

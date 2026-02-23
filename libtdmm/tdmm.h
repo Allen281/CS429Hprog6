@@ -10,6 +10,7 @@ typedef struct allocator allocator;
 struct header {
     size_t size;
     bool is_free;
+    bool is_marked;
     header* next;
 };
 
@@ -19,12 +20,12 @@ typedef enum {
   WORST_FIT,
 } alloc_strat_e;
 
-extern header* headers_start;
-extern header *headers_end;
-extern size_t requested_size;
-extern size_t total_size;
-extern alloc_strat_e strategy;
-extern long page_size;
+static header* headers_start;
+static header *headers_end;
+static size_t requested_size;
+static size_t total_size;
+static alloc_strat_e strategy;
+static long page_size;
 
 /**
  * Initializes the memory allocator with the given strategy.
@@ -52,5 +53,7 @@ void t_free(void *ptr);
  * Performs basic garbage collection by scanning the stack and heap managed by t_malloc and t_free.
  */
 void t_gcollect(void);
+
+void t_display_stats();
 
 #endif // TDMM_H
