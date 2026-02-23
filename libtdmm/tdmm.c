@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <math.h>
 
 static allocator* alloc;
 
@@ -39,7 +38,6 @@ static header* find_free_block(size_t size) {
 }
 
 void t_init(alloc_strat_e strat) {
-	// TODO: Implement this
 	strategy = strat;
 	page_size = sysconf(_SC_PAGESIZE);
 	header* initial_block = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -49,7 +47,7 @@ void t_init(alloc_strat_e strat) {
         exit(0);
     }
     
-    initial_block->size = 1024 - sizeof(header);
+    initial_block->size = page_size - sizeof(header);
     initial_block->is_free = true;
     initial_block->next = NULL;
     headers_start = initial_block;
@@ -65,23 +63,23 @@ void *t_malloc(size_t size) {
     if(aligned_size%4 != 0) aligned_size += 4 - (aligned_size % 4);
     
     header* block = find_free_block(aligned_size);
-    if(block == NULL) { 
-        int allocation_size = ceil((double)(size + sizeof(header)) / page_size) * page_size;
+    if(block == NULL) {
+        size_t size_needed = size + sizeof(header);
+        size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
         header* new_block = mmap(NULL, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         if(new_block == NULL) {
             fprintf(stderr, "Error: failed to allocate memory\n");
             exit(0);
         }
-        new_block->size = aligned_size;
+        new_block->size = allocation_size - sizeof(header);
         new_block->is_free = false;
         new_block->next = NULL;
         
-        header* end = headers_end;
-        end->next = new_block;
+        headers_end->next = new_block;
         headers_end = new_block;
-        total_size += aligned_size + sizeof(header);
-        requested_size += size;
-        return (char*)new_block + sizeof(header);
+        block = new_block;
+        
+        total_size += allocation_size;
     }
     
     if (block->size >= aligned_size + sizeof(header) + 4) {
@@ -95,7 +93,6 @@ void *t_malloc(size_t size) {
     }
     
     block->is_free = false;
-    total_size += aligned_size + sizeof(header);
     requested_size += aligned_size;
     return (char*)block + sizeof(header);
 }
@@ -133,7 +130,6 @@ void t_free(void *ptr) {
     block->is_free = true;
     
     requested_size -= block->size;
-    total_size -= block->size + sizeof(header);
     
     if(block->next != NULL && block->next->is_free && (char*)block + sizeof(header) + block->size == (char*)block->next) {
         block->size += sizeof(header) + block->next->size;
