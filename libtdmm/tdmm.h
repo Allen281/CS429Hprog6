@@ -24,6 +24,7 @@ static header *headers_end;
 static size_t requested_size;
 static size_t total_size;
 static alloc_strat_e strategy;
+static long page_size;
 
 /**
  * Initializes the memory allocator with the given strategy.

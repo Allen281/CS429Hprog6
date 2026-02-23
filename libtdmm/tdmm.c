@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <math.h>
 
 static allocator* alloc;
 
@@ -39,7 +41,8 @@ static header* find_free_block(size_t size) {
 void t_init(alloc_strat_e strat) {
 	// TODO: Implement this
 	strategy = strat;
-	header* initial_block = mmap(NULL, 1024, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	page_size = sysconf(_SC_PAGESIZE);
+	header* initial_block = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     
     if(initial_block == NULL) {
         fprintf(stderr, "Error: failed to initialize allocator\n");
@@ -52,7 +55,7 @@ void t_init(alloc_strat_e strat) {
     headers_start = initial_block;
     headers_end = initial_block;
     requested_size = 0;
-    total_size = 1024;
+    total_size = page_size;
 }
 
 void *t_malloc(size_t size) {
@@ -63,7 +66,8 @@ void *t_malloc(size_t size) {
     
     header* block = find_free_block(aligned_size);
     if(block == NULL) { 
-        header* new_block = mmap(NULL, aligned_size + sizeof(header), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        int allocation_size = ceil((double)(size + sizeof(header)) / page_size) * page_size;
+        header* new_block = mmap(NULL, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         if(new_block == NULL) {
             fprintf(stderr, "Error: failed to allocate memory\n");
             exit(0);
