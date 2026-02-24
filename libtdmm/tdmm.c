@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <inttypes.h>
 
 static header* headers_start;
 static header *headers_end;
@@ -119,14 +118,6 @@ static void merge_blocks(header* block){
     block->next = block->next->next;
 }
 
-static void merge_free_blocks() {
-    header* current = headers_start;
-    while(current && current->next) {
-        if(current->is_free && current->next->is_free) merge_blocks(current);
-        else current = current->next;
-    }
-}
-
 void t_free(void *ptr) {
    	if(ptr == NULL) return;
     
@@ -175,34 +166,6 @@ static void mark(uintptr_t* ptr) {
         
         current = current->next;
     }
-}
-
-extern char **environ;
-void t_gcollect(void) {
-    void* stack_bottom = __builtin_frame_address(0);
-    void* stack_top = environ;
-    
-    uintptr_t* current = (uintptr_t*)stack_bottom;
-    uintptr_t* end = (uintptr_t*)stack_top;
-    
-    while(current < end) {
-        mark((uintptr_t*) *current);
-        current++;
-    }
-    
-    header* current_block = headers_start;
-    while (current_block) {
-        if (!current_block->is_free) {
-            if(!current_block->is_marked){
-                current_block->is_free = true;
-                requested_size -= current_block->size;
-            }
-            else current_block->is_marked = false;
-        }
-        current_block = current_block->next;
-    }
-    
-    merge_free_blocks();
 }
 
 void t_display_stats() {
