@@ -74,11 +74,12 @@ void *t_malloc(size_t size) {
     if(block == NULL) {
         size_t size_needed = aligned_size + sizeof(header);
         size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
-        header* new_block = mmap(NULL, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        void* endptr = (char*)headers_end + sizeof(header) + headers_end->size;
+        header* new_block = mmap(endptr, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         
         if(new_block == NULL) {
             fprintf(stderr, "Error: failed to allocate memory\n");
-            exit(0);
+            exit(1);
         }
         
         new_block->size = allocation_size - sizeof(header);
