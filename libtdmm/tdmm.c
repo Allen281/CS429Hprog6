@@ -44,6 +44,13 @@ static header* find_free_block(size_t size) {
 }
 
 void t_init(alloc_strat_e strat) {
+    header* current = headers_start;
+    while(current){
+        header* next = current->next;
+        munmap(current, current->size + sizeof(header));
+        current = next;
+    }
+    
 	strategy = strat;
 	page_size = sysconf(_SC_PAGESIZE);
 	header* initial_block = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
