@@ -12,58 +12,44 @@ static size_t total_size;
 static alloc_strat_e strategy;
 static long page_size;
 
+static void set_block_state(header* block, bool is_free, bool is_marked, size_t size, header* next) {
+    block->is_free = is_free;
+    block->is_marked = is_marked;
+    block->size = size;
+    block->next = next;    
+}
+
 static header* find_free_block(size_t size) {
     header* current = headers_start;
-    header* best_fit = NULL;
-    header* worst_fit = NULL;
+    header* rslt = NULL;
 
     while(current != NULL) {
         if(current->is_free && current->size >= size) {
             if(strategy == FIRST_FIT) {
                 return current;
             } else if(strategy == BEST_FIT) {
-                if(best_fit == NULL || current->size < best_fit->size) {
-                    best_fit = current;
-                }
+                if(rslt == NULL || current->size < rslt->size) rslt = current;
             } else if(strategy == WORST_FIT) {
-                if(worst_fit == NULL || current->size > worst_fit->size) {
-                    worst_fit = current;
-                }
+                if(rslt == NULL || current->size > rslt->size) rslt = current;
             }
         }
         current = current->next;
     }
 
-    if(strategy == BEST_FIT) {
-        return best_fit;
-    } else if(strategy == WORST_FIT) {
-        return worst_fit;
-    }
-    
-    return NULL;
+    return rslt;
 }
 
 void t_init(alloc_strat_e strat) {
-    header* current = headers_start;
-    while(current){
-        header* next = current->next;
-        munmap(current, current->size + sizeof(header));
-        current = next;
-    }
-    
 	strategy = strat;
 	page_size = sysconf(_SC_PAGESIZE);
 	header* initial_block = mmap(NULL, page_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     
-    if(initial_block == NULL) {
+    if(initial_block == MAP_FAILED) {
         fprintf(stderr, "Error: failed to initialize allocator\n");
         exit(0);
     }
     
-    initial_block->size = page_size - sizeof(header);
-    initial_block->is_free = true;
-    initial_block->is_marked = false;
-    initial_block->next = NULL;
+    set_block_state(initial_block, true, false, page_size - sizeof(header), NULL);
     
     headers_start = initial_block;
     headers_end = initial_block;
@@ -78,7 +64,7 @@ void *t_malloc(size_t size) {
     if(aligned_size%4 != 0) aligned_size += 4 - (aligned_size % 4);
     
     header* block = find_free_block(aligned_size);
-    if(block == NULL) {
+    if(block == MAP_FAILED) {
         size_t size_needed = aligned_size + sizeof(header);
         size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
         void* endptr = (char*)headers_end + sizeof(header) + headers_end->size;
@@ -89,10 +75,7 @@ void *t_malloc(size_t size) {
             exit(1);
         }
         
-        new_block->size = allocation_size - sizeof(header);
-        new_block->is_free = true;
-        new_block->is_marked = false;
-        new_block->next = NULL;
+        set_block_state(new_block, true, false, allocation_size - sizeof(header), NULL);
         
         headers_end->next = new_block;
         headers_end = new_block;
@@ -103,10 +86,7 @@ void *t_malloc(size_t size) {
     
     if (block->size >= aligned_size + sizeof(header) + 4) {
         header* new_block = (header*)((char*)block + sizeof(header) + aligned_size);
-        new_block->size = block->size - aligned_size - sizeof(header);
-        new_block->is_free = true;
-        new_block->is_marked = false;
-        new_block->next = block->next;
+        set_block_state(new_block, true, false, block->size - aligned_size - sizeof(header), block->next);
         
         block->size = aligned_size;
         block->next = new_block;
@@ -120,7 +100,9 @@ void *t_malloc(size_t size) {
 }
 
 static void merge_blocks(header* block){
+    if(!block || !block->next) return;
     if((char*)block->next != (char*)block + sizeof(header) + block->size) return;
+    if(!block->is_free || !block->next->is_free) return;
     
     block->size += sizeof(header) + block->next->size;
     block->next = block->next->next;
@@ -157,23 +139,8 @@ void t_free(void *ptr) {
     block->is_free = true;
     requested_size -= block->size;
     
-        merge_blocks(block);
-        merge_blocks(prev);
-}
-
-static void mark(uintptr_t* ptr) {
-    header* current = headers_start;
-    while(current) {
-        uintptr_t block_start = (uintptr_t)((char*)current + sizeof(header));
-        uintptr_t block_end = block_start + current->size;
-        
-        if((uintptr_t)ptr >= block_start && (uintptr_t)ptr < block_end) {
-            current->is_marked = true;
-            break;
-        }
-        
-        current = current->next;
-    }
+    merge_blocks(block);
+    merge_blocks(prev);
 }
 
 void t_display_stats() {
