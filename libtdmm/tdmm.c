@@ -64,13 +64,13 @@ void *t_malloc(size_t size) {
     if(aligned_size%4 != 0) aligned_size += 4 - (aligned_size % 4);
     
     header* block = find_free_block(aligned_size);
-    if(block == MAP_FAILED) {
+    if(block == NULL) {
         size_t size_needed = aligned_size + sizeof(header);
         size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
         void* endptr = (char*)headers_end + sizeof(header) + headers_end->size;
         header* new_block = mmap(endptr, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         
-        if(new_block == NULL) {
+        if(new_block == MAP_FAILED) {
             fprintf(stderr, "Error: failed to allocate memory\n");
             exit(1);
         }
@@ -95,7 +95,7 @@ void *t_malloc(size_t size) {
     }
     
     block->is_free = false;
-    requested_size += aligned_size;
+    requested_size += block->size;
     return (char*)block + sizeof(header);
 }
 
@@ -103,6 +103,8 @@ static void merge_blocks(header* block){
     if(!block || !block->next) return;
     if((char*)block->next != (char*)block + sizeof(header) + block->size) return;
     if(!block->is_free || !block->next->is_free) return;
+    
+    if(block->next == headers_end) headers_end = block;
     
     block->size += sizeof(header) + block->next->size;
     block->next = block->next->next;
