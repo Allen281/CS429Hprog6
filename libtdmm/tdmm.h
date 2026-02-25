@@ -9,7 +9,6 @@ typedef struct allocator allocator;
 
 struct header {
     size_t size;
-    bool is_free;
     header* next;
 };
 

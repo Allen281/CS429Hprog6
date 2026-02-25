@@ -5,6 +5,9 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#define IS_FREE(x) x->size&1
+#define SET_FREE(x, y) x->size &= 0xFFFE; x->size |= y;
+
 static header* headers_start;
 static header *headers_end;
 static size_t requested_size;
@@ -15,8 +18,8 @@ static alloc_strat_e strategy;
 static long page_size;
 static size_t data_structure_overhead;
 
-static void set_block_state(header* block, bool is_free, bool is_marked, size_t size, header* next) {
-    block->is_free = is_free;
+static void set_block_state(header* block, int is_free, size_t size, header* next) {
+    SET_FREE(block, is_free)
     block->size = size;
     block->next = next;    
 }
@@ -26,7 +29,7 @@ static header* find_free_block(size_t size) {
     header* rslt = NULL;
 
     while(current != NULL) {
-        if(current->is_free && current->size >= size) {
+        if(IS_FREE(current) && current->size >= size) {
             if(strategy == FIRST_FIT) {
                 return current;
             } else if(strategy == BEST_FIT) {
@@ -51,7 +54,7 @@ void t_init(alloc_strat_e strat) {
         exit(0);
     }
     
-    set_block_state(initial_block, true, false, page_size - sizeof(header), NULL);
+    set_block_state(initial_block, true, page_size - sizeof(header), NULL);
     
     headers_start = initial_block;
     headers_end = initial_block;
@@ -79,7 +82,7 @@ void *t_malloc(size_t size) {
             exit(1);
         }
         
-        set_block_state(new_block, true, false, allocation_size - sizeof(header), NULL);
+        set_block_state(new_block, true, allocation_size - sizeof(header), NULL);
         
         headers_end->next = new_block;
         headers_end = new_block;
@@ -90,7 +93,7 @@ void *t_malloc(size_t size) {
     
     if (block->size >= aligned_size + sizeof(header) + 4) {
         header* new_block = (header*)((char*)block + sizeof(header) + aligned_size);
-        set_block_state(new_block, true, false, block->size - aligned_size - sizeof(header), block->next);
+        set_block_state(new_block, true, block->size - aligned_size - sizeof(header), block->next);
         
         block->size = aligned_size;
         block->next = new_block;
@@ -98,7 +101,7 @@ void *t_malloc(size_t size) {
         if(headers_end == block) headers_end = new_block;
     }
     
-    block->is_free = false;
+    SET_FREE(block, 0);
     requested_size += block->size;
     average_utilization += (double)requested_size / total_size;
     data_structure_overhead += sizeof(header);
@@ -109,7 +112,7 @@ void *t_malloc(size_t size) {
 static void merge_blocks(header* block){
     if(!block || !block->next) return;
     if((char*)block->next != (char*)block + sizeof(header) + block->size) return;
-    if(!block->is_free || !block->next->is_free) return;
+    if(!(IS_FREE(block)) || !(IS_FREE(block->next))) return;
     
     if(block->next == headers_end) headers_end = block;
     
@@ -128,7 +131,7 @@ void t_free(void *ptr) {
         void* current_block = (char*)current + sizeof(header);
         
         if(current_block == ptr) {
-            if(current->is_free) {
+            if(IS_FREE(current)) {
                 fprintf(stderr, "Error: attempted to free an already freed block\n");
                 return;
             }
@@ -146,7 +149,7 @@ void t_free(void *ptr) {
     }
     
     header* block = (header*)((char*)ptr - sizeof(header));
-    block->is_free = true;
+    SET_FREE(block, 1);
     requested_size -= block->size;
     average_utilization += (double)requested_size / total_size;
     operation_count++;
