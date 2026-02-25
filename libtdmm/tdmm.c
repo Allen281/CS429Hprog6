@@ -5,8 +5,11 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define IS_FREE(x) x->size&1
-#define SET_FREE(x, y) x->size &= 0xFFFE; x->size |= y;
+#define IS_FREE(x) (x->size&1)
+#define SET_FREE(x, y) x->size = (x->size & ~1ULL) | y
+
+#define GET_SIZE(x) (x->size & ~1ULL)
+#define SET_SIZE(x, y) x->size = y | IS_FREE(x)
 
 static header* headers_start;
 static header *headers_end;
@@ -19,8 +22,8 @@ static long page_size;
 static size_t data_structure_overhead;
 
 static void set_block_state(header* block, int is_free, size_t size, header* next) {
-    SET_FREE(block, is_free)
-    block->size = size;
+    SET_FREE(block, is_free);
+    SET_SIZE(block, size);
     block->next = next;    
 }
 
@@ -29,13 +32,14 @@ static header* find_free_block(size_t size) {
     header* rslt = NULL;
 
     while(current != NULL) {
-        if(IS_FREE(current) && current->size >= size) {
+        size_t s = GET_SIZE(current);
+        if(IS_FREE(current) && s >= size) {
             if(strategy == FIRST_FIT) {
                 return current;
             } else if(strategy == BEST_FIT) {
-                if(rslt == NULL || current->size < rslt->size) rslt = current;
+                if(rslt == NULL || s < GET_SIZE(rslt)) rslt = current;
             } else if(strategy == WORST_FIT) {
-                if(rslt == NULL || current->size > rslt->size) rslt = current;
+                if(rslt == NULL || s > GET_SIZE(rslt)) rslt = current;
             }
         }
         current = current->next;
@@ -74,7 +78,7 @@ void *t_malloc(size_t size) {
     if(block == NULL) {
         size_t size_needed = aligned_size + sizeof(header);
         size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
-        void* endptr = (char*)headers_end + sizeof(header) + headers_end->size;
+        void* endptr = (char*)headers_end + sizeof(header) + GET_SIZE(headers_end);
         header* new_block = mmap(endptr, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         
         if(new_block == MAP_FAILED) {
@@ -91,18 +95,19 @@ void *t_malloc(size_t size) {
         total_size += allocation_size;
     }
     
-    if (block->size >= aligned_size + sizeof(header) + 4) {
+    size_t block_size = GET_SIZE(block);
+    if (block_size >= aligned_size + sizeof(header) + 4) {
         header* new_block = (header*)((char*)block + sizeof(header) + aligned_size);
-        set_block_state(new_block, true, block->size - aligned_size - sizeof(header), block->next);
+        set_block_state(new_block, true, block_size - aligned_size - sizeof(header), block->next);
         
-        block->size = aligned_size;
+        SET_SIZE(block, aligned_size);
         block->next = new_block;
         
         if(headers_end == block) headers_end = new_block;
     }
     
     SET_FREE(block, 0);
-    requested_size += block->size;
+    requested_size += GET_SIZE(block);
     average_utilization += (double)requested_size / total_size;
     data_structure_overhead += sizeof(header);
     operation_count++;
@@ -111,12 +116,12 @@ void *t_malloc(size_t size) {
 
 static void merge_blocks(header* block){
     if(!block || !block->next) return;
-    if((char*)block->next != (char*)block + sizeof(header) + block->size) return;
-    if(!(IS_FREE(block)) || !(IS_FREE(block->next))) return;
+    if((char*)block->next != (char*)block + sizeof(header) + GET_SIZE(block)) return;
+    if(!IS_FREE(block) || !IS_FREE(block->next)) return;
     
     if(block->next == headers_end) headers_end = block;
     
-    block->size += sizeof(header) + block->next->size;
+    block->size += sizeof(header) + GET_SIZE(block->next);
     block->next = block->next->next;
     data_structure_overhead -= sizeof(header);
 }
@@ -150,7 +155,7 @@ void t_free(void *ptr) {
     
     header* block = (header*)((char*)ptr - sizeof(header));
     SET_FREE(block, 1);
-    requested_size -= block->size;
+    requested_size -= GET_SIZE(block);
     average_utilization += (double)requested_size / total_size;
     operation_count++;
     
