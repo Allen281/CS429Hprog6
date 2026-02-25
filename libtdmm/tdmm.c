@@ -5,11 +5,11 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define IS_FREE(x) (x->size&1)
-#define SET_FREE(x, y) x->size = (x->size & ~1ULL) | y
+#define IS_FREE(x) ((x)->size & 1)
+#define SET_FREE(x, y) ((x)->size = ((x)->size & ~1ULL) | (y))
 
-#define GET_SIZE(x) (x->size & ~1ULL)
-#define SET_SIZE(x, y) x->size = y | IS_FREE(x)
+#define GET_SIZE(x) ((x)->size & ~1ULL)
+#define SET_SIZE(x, y) ((x)->size = (y) | IS_FREE(x))
 
 static header* headers_start;
 static header *headers_end;
@@ -22,8 +22,7 @@ static long page_size;
 static size_t data_structure_overhead;
 
 static void set_block_state(header* block, int is_free, size_t size, header* next) {
-    SET_FREE(block, is_free);
-    SET_SIZE(block, size);
+    block->size = size | is_free;
     block->next = next;    
 }
 
