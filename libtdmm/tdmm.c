@@ -71,13 +71,12 @@ void t_init(alloc_strat_e strat) {
 void *t_malloc(size_t size) {
     if(size == 0) return NULL;
     
-    size_t aligned_size = size;
-    if(aligned_size%4 != 0) aligned_size += 4 - (aligned_size % 4);
+    size_t aligned_size = (size + 3) & ~3;
     
     header* block = find_free_block(aligned_size);
     if(block == NULL) {
         size_t size_needed = aligned_size + sizeof(header);
-        size_t allocation_size = ((size_needed + page_size - 1) / page_size) * page_size;
+        size_t allocation_size = (size_needed + page_size - 1) & ~(page_size - 1);
         void* endptr = (char*)headers_end + sizeof(header) + GET_SIZE(headers_end);
         header* new_block = mmap(endptr, allocation_size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         
@@ -93,6 +92,7 @@ void *t_malloc(size_t size) {
         block = new_block;
         
         total_size += allocation_size;
+        data_structure_overhead += sizeof(header);
     }
     
     size_t block_size = GET_SIZE(block);
@@ -100,16 +100,16 @@ void *t_malloc(size_t size) {
         header* new_block = (header*)((char*)block + sizeof(header) + aligned_size);
         set_block_state(new_block, true, block_size - aligned_size - sizeof(header), block->next, block);
         
-        SET_SIZE(block, aligned_size);
+        block_size = aligned_size;
         block->next = new_block;
         
         if(headers_end == block) headers_end = new_block;
+        data_structure_overhead += sizeof(header);
     }
     
-    SET_FREE(block, 0);
-    requested_size += GET_SIZE(block);
+    block->size = block_size;
+    requested_size += block_size;
     average_utilization += (double)requested_size / total_size;
-    data_structure_overhead += sizeof(header);
     operation_count++;
     return (char*)block + sizeof(header);
 }
@@ -142,6 +142,6 @@ void t_free(void *ptr) {
 void t_display_stats() {
     printf("Page size: %zu bytes\n", page_size);
     printf("Total bytes requested from sys: %zu bytes\n", total_size);
-    printf("Data structure overhead: %zu bytes (%.2f%%)\n", data_structure_overhead, (double)data_structure_overhead / total_size * 100);
+    printf("Data structure overhead: %zu bytes (%.5f%%)\n", data_structure_overhead, (double)data_structure_overhead / total_size * 100);
     printf("Average %% memory utilization: %.2f%%\n", average_utilization/operation_count * 100);
 }
