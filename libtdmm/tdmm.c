@@ -17,7 +17,6 @@ static size_t data_structure_overhead;
 
 static void set_block_state(header* block, bool is_free, bool is_marked, size_t size, header* next) {
     block->is_free = is_free;
-    block->is_marked = is_marked;
     block->size = size;
     block->next = next;    
 }
