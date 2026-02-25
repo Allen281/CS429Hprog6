@@ -10,6 +10,7 @@ typedef struct allocator allocator;
 struct header {
     size_t size;
     header* next;
+    header* prev;
 };
 
 typedef enum {

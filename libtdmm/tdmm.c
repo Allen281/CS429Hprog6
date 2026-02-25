@@ -21,9 +21,10 @@ static alloc_strat_e strategy;
 static long page_size;
 static size_t data_structure_overhead;
 
-static void set_block_state(header* block, int is_free, size_t size, header* next) {
+static void set_block_state(header* block, int is_free, size_t size, header* next, header* prev) {
     block->size = size | is_free;
-    block->next = next;    
+    block->next = next;
+    block->prev = prev;
 }
 
 static header* find_free_block(size_t size) {
@@ -57,7 +58,7 @@ void t_init(alloc_strat_e strat) {
         exit(0);
     }
     
-    set_block_state(initial_block, true, page_size - sizeof(header), NULL);
+    set_block_state(initial_block, true, page_size - sizeof(header), NULL, NULL);
     
     headers_start = initial_block;
     headers_end = initial_block;
@@ -85,7 +86,7 @@ void *t_malloc(size_t size) {
             exit(1);
         }
         
-        set_block_state(new_block, true, allocation_size - sizeof(header), NULL);
+        set_block_state(new_block, true, allocation_size - sizeof(header), NULL, headers_end);
         
         headers_end->next = new_block;
         headers_end = new_block;
@@ -97,7 +98,7 @@ void *t_malloc(size_t size) {
     size_t block_size = GET_SIZE(block);
     if (block_size >= aligned_size + sizeof(header) + 4) {
         header* new_block = (header*)((char*)block + sizeof(header) + aligned_size);
-        set_block_state(new_block, true, block_size - aligned_size - sizeof(header), block->next);
+        set_block_state(new_block, true, block_size - aligned_size - sizeof(header), block->next, block);
         
         SET_SIZE(block, aligned_size);
         block->next = new_block;
@@ -128,30 +129,6 @@ static void merge_blocks(header* block){
 void t_free(void *ptr) {
    	if(ptr == NULL) return;
     
-    header* current = headers_start;
-    bool found = false;
-    header* prev = NULL;
-    while(current) {
-        void* current_block = (char*)current + sizeof(header);
-        
-        if(current_block == ptr) {
-            if(IS_FREE(current)) {
-                fprintf(stderr, "Error: attempted to free an already freed block\n");
-                return;
-            }
-            found = true;
-            break;
-        }
-        
-        prev = current;
-        current = current->next;
-    }
-    
-    if(!found) {
-        fprintf(stderr, "Error: attempted to free a pointer that was not allocated\n");
-        return;
-    }
-    
     header* block = (header*)((char*)ptr - sizeof(header));
     SET_FREE(block, 1);
     requested_size -= GET_SIZE(block);
@@ -159,7 +136,7 @@ void t_free(void *ptr) {
     operation_count++;
     
     merge_blocks(block);
-    merge_blocks(prev);
+    merge_blocks(block->prev);
 }
 
 void t_display_stats() {
