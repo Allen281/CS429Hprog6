@@ -14,8 +14,6 @@
 static header* headers_start;
 static header *headers_end;
 static size_t requested_size;
-static double average_utilization;
-static int operation_count;
 static size_t total_size;
 static alloc_strat_e strategy;
 static long page_size;
@@ -65,7 +63,6 @@ void t_init(alloc_strat_e strat) {
     requested_size = 0;
     total_size = page_size;
     data_structure_overhead = sizeof(header);
-    average_utilization = 0;
 }
 
 void *t_malloc(size_t size) {
@@ -109,8 +106,6 @@ void *t_malloc(size_t size) {
     
     block->size = block_size;
     requested_size += block_size;
-    average_utilization += (double)requested_size / total_size;
-    operation_count++;
     return (char*)block + sizeof(header);
 }
 
@@ -132,8 +127,6 @@ void t_free(void *ptr) {
     header* block = (header*)((char*)ptr - sizeof(header));
     SET_FREE(block, 1);
     requested_size -= GET_SIZE(block);
-    average_utilization += (double)requested_size / total_size;
-    operation_count++;
     
     merge_blocks(block);
     merge_blocks(block->prev);
@@ -143,5 +136,6 @@ void t_display_stats() {
     printf("Page size: %zu bytes\n", page_size);
     printf("Total bytes requested from sys: %zu bytes\n", total_size);
     printf("Data structure overhead: %zu bytes (%.5f%%)\n", data_structure_overhead, (double)data_structure_overhead / total_size * 100);
-    printf("Average %% memory utilization: %.2f%%\n", average_utilization/operation_count * 100);
 }
+
+double t_get_usage(){ return (double)requested_size / total_size * 100;}

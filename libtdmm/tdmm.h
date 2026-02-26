@@ -47,5 +47,6 @@ void t_free(void *ptr);
 void t_gcollect(void);
 
 void t_display_stats();
+double t_get_usage();
 
 #endif // TDMM_H
