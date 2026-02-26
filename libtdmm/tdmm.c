@@ -133,7 +133,6 @@ void t_free(void *ptr) {
 }
 
 void t_display_stats() {
-    printf("Page size: %zu bytes\n", page_size);
     printf("Total bytes requested from sys: %zu bytes\n", total_size);
     printf("Data structure overhead: %zu bytes (%.5f%%)\n", data_structure_overhead, (double)data_structure_overhead / total_size * 100);
 }

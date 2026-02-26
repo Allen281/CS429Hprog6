@@ -5,3 +5,5 @@ build:
 	@echo "build done"
 run:
 	./hw6
+valgrind:
+	valgrind --leak-check=full --track-origins=yes --show-leak-kinds=all ./hw6

@@ -1,47 +1,106 @@
-#include <bits/time.h>
-#include <bits/types/clockid_t.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
+#include <stdlib.h>
 #include <time.h>
 #include "tdmm.h"
 
-// Helper method to get the elapsed time in nanoseconds between two timespecs
-double get_elasped_time(struct timespec start, struct timespec end) {
-    return (end.tv_sec - start.tv_sec)*1e9 + (end.tv_nsec - start.tv_nsec);
+#define NUM_OPERATIONS 10000
+
+double get_elapsed_time(struct timespec start, struct timespec end) {
+    return (double)(end.tv_sec - start.tv_sec) * 1e9 + (double)(end.tv_nsec - start.tv_nsec);
 }
 
-int main(){
-    FILE* malloc_graph = fopen("malloc_times.csv", "w");
-    FILE* usage_graph = fopen("usage_stats.csv", "w");
-    
-    struct timespec start, end;
-    double average_malloc_time = 0.0;
+void run_benchmarks_for_policy(alloc_strat_e strat, const char* policy_name) {
+    char speed_filename[256];
+    char util_filename[256];
+
+    sprintf(speed_filename, "speed_%s.csv", policy_name);
+    sprintf(util_filename, "utilization_%s.csv", policy_name);
+
+    FILE* speed_graph = fopen(speed_filename, "w");
+    FILE* util_graph = fopen(util_filename, "w");
+
+    if (!speed_graph || !util_graph) {
+        printf("Failed to open output files for %s\n", policy_name);
+        return;
+    }
+    fprintf(speed_graph, "Size(Bytes),MallocTime(ns),FreeTime(ns)\n");
+    fprintf(util_graph, "Time(ns),Utilization(%%)\n");
+
+    struct timespec start, end, start_time, current_time;
     const size_t MAX_SIZE = 1024*1024*8;
-    const size_t MIN_SIZE = 1;
-    const size_t INTERVAL = 1024;
-    
-    struct timespec total_start;
-    clock_gettime(CLOCK_MONOTONIC, &total_start);
-    for(size_t size = MIN_SIZE; size <= MAX_SIZE; size += INTERVAL){
-        t_init(FIRST_FIT);
+
+    for (size_t size = 1; size <= MAX_SIZE; size *= 2) {
+        t_init(strat);
+
         clock_gettime(CLOCK_MONOTONIC, &start);
         void* ptr = t_malloc(size);
         clock_gettime(CLOCK_MONOTONIC, &end);
-        
-        double malloc_time = get_elasped_time(start, end);
-        average_malloc_time += malloc_time;
-        fprintf(malloc_graph, "%12zu, %13.0f\n", size, malloc_time);
-        
-        double cur_time = get_elasped_time(total_start, end);
-        double usage = t_get_usage();
-        fprintf(usage_graph, "%13.0f, %.2f%%\n", cur_time, usage);
-        
+        double malloc_time = get_elapsed_time(start, end);
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
         t_free(ptr);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        double free_time = get_elapsed_time(start, end);
+
+        fprintf(speed_graph, "%zu,%.0f,%.0f\n", size, malloc_time, free_time);
     }
-    
+
+    t_init(strat);
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    double average_utilization = 0.0;
+    void* allocated[NUM_OPERATIONS] = {NULL};
+
+    for (int i = 0; i < NUM_OPERATIONS; i++) {
+        int is_alloc = (rand() % 100 < 70);
+        
+        if(i == 0) is_alloc = 1;
+
+        if(is_alloc){
+            size_t alloc_size = (rand() % (1024*1024*8)) + 1;
+            allocated[i] = t_malloc(alloc_size);
+        } else {
+            int index = rand() % i;
+            int counter = 0;
+            while(allocated[index] == 0 && counter < i){
+                index = rand() % i;
+                counter++;
+            }
+            
+            t_free(allocated[index]);
+            allocated[index] = NULL;
+        }
+
+        clock_gettime(CLOCK_MONOTONIC, &current_time);
+        double elapsed = get_elapsed_time(start_time, current_time);
+        double current_util = t_get_usage();
+        average_utilization += current_util;
+
+        fprintf(util_graph, "%.0f,%.2f\n", elapsed, current_util);
+    }
+
+    fclose(speed_graph);
+    fclose(util_graph);
+
+    // Print required console statistics
+    printf("Results for %s: \n", policy_name);
+    printf("Average Memory Utilization: %.2f%%\n", average_utilization/NUM_OPERATIONS);
     t_display_stats();
-    size_t data_points = (MAX_SIZE-MIN_SIZE+1)/INTERVAL;
-    printf("Average t_malloc time: %.0f ns\n", average_malloc_time / data_points);
+    printf("\n");
+}
+
+int main() {
+    int random = time(NULL);
+    srand(random);
+
+    run_benchmarks_for_policy(FIRST_FIT, "First_Fit");
+
+    srand(random); // Reset seed to ensure the workload sequence is identical
+    run_benchmarks_for_policy(BEST_FIT,  "Best_Fit");
+
+    srand(random); // Reset seed again
+    run_benchmarks_for_policy(WORST_FIT, "Worst_Fit");
+
+    printf("Benchmarking complete. CSV files generated successfully.\n");
     return 0;
 }
