@@ -9,7 +9,7 @@ double get_elapsed_time(struct timespec start, struct timespec end) {
     return (double)(end.tv_sec - start.tv_sec) * 1e9 + (double)(end.tv_nsec - start.tv_nsec);
 }
 
-void run_benchmarks_for_policy(alloc_strat_e strat, const char* policy_name) {
+void run_benchmarks_for_policy(alloc_strat_e strat, const char* policy_name, FILE* average_util, FILE* overhead) {
     char speed_filename[256];
     char util_filename[256];
 
@@ -81,6 +81,9 @@ void run_benchmarks_for_policy(alloc_strat_e strat, const char* policy_name) {
 
     fclose(speed_graph);
     fclose(util_graph);
+    
+    fprintf(average_util, "%s,%.2f\n", policy_name, average_utilization/NUM_OPERATIONS);
+    fprintf(overhead, "%s,%zu\n", policy_name, t_get_ds_overhead());
 
     // Print required console statistics
     printf("Results for %s: \n", policy_name);
@@ -92,14 +95,20 @@ void run_benchmarks_for_policy(alloc_strat_e strat, const char* policy_name) {
 int main() {
     int random = time(NULL);
     srand(random);
+    
+    FILE* average_util = fopen("average_utilization.csv", "w");
+    FILE* overhead = fopen("overhead.csv", "w");
 
-    run_benchmarks_for_policy(FIRST_FIT, "First_Fit");
+    run_benchmarks_for_policy(FIRST_FIT, "First_Fit", average_util, overhead);
 
-    srand(random); // Reset seed to ensure the workload sequence is identical
-    run_benchmarks_for_policy(BEST_FIT,  "Best_Fit");
+    srand(random);
+    run_benchmarks_for_policy(BEST_FIT,  "Best_Fit", average_util, overhead);
 
-    srand(random); // Reset seed again
-    run_benchmarks_for_policy(WORST_FIT, "Worst_Fit");
+    srand(random);
+    run_benchmarks_for_policy(WORST_FIT, "Worst_Fit", average_util, overhead);
+    
+    fclose(average_util);
+    fclose(overhead);
 
     printf("Benchmarking complete. CSV files generated successfully.\n");
     return 0;

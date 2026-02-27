@@ -6,72 +6,122 @@ def main():
     policies = ['First_Fit', 'Best_Fit', 'Worst_Fit']
     colors = {'First_Fit': 'blue', 'Best_Fit': 'green', 'Worst_Fit': 'red'}
 
+    # =========================================================================
     # GRAPH 1: Speed vs Size (Log-Log Scale)
-    plt.figure(figsize=(14, 6))
+    # =========================================================================
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
     # Subplot 1: tmalloc() speed
-    plt.subplot(1, 2, 1)
     for policy in policies:
         filename = f'speed_{policy}.csv'
         if os.path.exists(filename):
             df = pd.read_csv(filename)
-            plt.plot(df['Size(Bytes)'], df['MallocTime(ns)'], marker='o', markersize=4, 
+            ax1.plot(df['Size(Bytes)'], df['MallocTime(ns)'], marker='o', markersize=4, 
                      label=policy.replace('_', ' '), color=colors[policy])
-        else:
-            print(f"Warning: {filename} not found.")
 
-    plt.xscale('log', base=2)
-    plt.yscale('log', base=10) # Added Log Scale for Y-axis
-    plt.xlabel('Allocation Size (Bytes) [Log Scale]')
-    plt.ylabel('Time (ns) [Log Scale]')
-    plt.title('tmalloc() Speed vs. Allocation Size')
-    plt.legend()
-    plt.grid(True, which="both", ls="--", alpha=0.5)
+    ax1.set_xscale('log', base=2)
+    ax1.set_yscale('log', base=10)
+    ax1.set_xlabel('Allocation Size (Bytes) [Log Scale]')
+    ax1.set_ylabel('Time (ns) [Log Scale]')
+    ax1.set_title('tmalloc() Speed vs. Allocation Size')
+    ax1.legend()
+    ax1.grid(True, which="both", ls="--", alpha=0.5)
 
     # Subplot 2: tfree() speed
-    plt.subplot(1, 2, 2)
     for policy in policies:
         filename = f'speed_{policy}.csv'
         if os.path.exists(filename):
             df = pd.read_csv(filename)
-            plt.plot(df['Size(Bytes)'], df['FreeTime(ns)'], marker='x', markersize=4, 
+            ax2.plot(df['Size(Bytes)'], df['FreeTime(ns)'], marker='x', markersize=4, 
                      linestyle='--', label=policy.replace('_', ' '), color=colors[policy])
 
-    plt.xscale('log', base=2)
-    plt.yscale('log', base=10) # Added Log Scale for Y-axis
-    plt.xlabel('Allocation Size (Bytes) [Log Scale]')
-    plt.ylabel('Time (ns) [Log Scale]')
-    plt.title('tfree() Speed vs. Allocation Size')
-    plt.legend()
-    plt.grid(True, which="both", ls="--", alpha=0.5)
+    ax2.set_xscale('log', base=2)
+    ax2.set_yscale('log', base=10)
+    ax2.set_xlabel('Allocation Size (Bytes) [Log Scale]')
+    ax2.set_ylabel('Time (ns) [Log Scale]')
+    ax2.set_title('tfree() Speed vs. Allocation Size')
+    ax2.legend()
+    ax2.grid(True, which="both", ls="--", alpha=0.5)
 
     plt.tight_layout()
     plt.savefig('speed_comparison.png')
-    print("Saved speed comparison graph to 'speed_comparison.png'")
+    plt.clf()
 
+    # =========================================================================
     # GRAPH 2: Memory Utilization Over Time
-    plt.figure(figsize=(10, 6))
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(10, 6))
     for policy in policies:
         filename = f'utilization_{policy}.csv'
         if os.path.exists(filename):
             df = pd.read_csv(filename)
-            plt.plot(df['Time(ns)'], df['Utilization(%)'], alpha=0.7, 
+            ax.plot(df['Time(ns)'], df['Utilization(%)'], alpha=0.7, 
                      label=policy.replace('_', ' '), color=colors[policy])
-        else:
-            print(f"Warning: {filename} not found.")
 
-    plt.xlabel('Time (ns)')
-    plt.ylabel('Memory Utilization (%)')
-    plt.title('Memory Utilization Over Time')
-    plt.legend()
-    plt.grid(True, alpha=0.5)
+    ax.set_xlabel('Time (ns)')
+    ax.set_ylabel('Memory Utilization (%)')
+    ax.set_title('Memory Utilization Over Time')
+    ax.legend()
+    ax.grid(True, alpha=0.5)
     
     plt.tight_layout()
     plt.savefig('utilization_comparison.png')
-    print("Saved utilization graph to 'utilization_comparison.png'")
+    plt.clf()
 
-    # Show the plots on the screen
-    plt.show()
+    # =========================================================================
+    # GRAPH 3: Average Utilization Bar Chart
+    # =========================================================================
+    avg_util_filename = 'average_utilization.csv'
+    if os.path.exists(avg_util_filename):
+        try:
+            df_avg = pd.read_csv(avg_util_filename, header=None, names=['Policy', 'Utilization'])
+            
+            # Clean up Policy names and convert Utilization string (e.g. '85.5%') to float
+            df_avg['Policy'] = df_avg['Policy'].str.strip()
+            df_avg['Utilization'] = df_avg['Utilization'].astype(str).str.replace('%', '').astype(float)
+            
+            fig, ax = plt.subplots(figsize=(8, 6))
+            plot_colors = [colors.get(p, 'gray') for p in df_avg['Policy']]
+            
+            ax.bar(df_avg['Policy'].str.replace('_', ' '), df_avg['Utilization'], color=plot_colors, alpha=0.8)
+            ax.set_xlabel('Allocation Policy')
+            ax.set_ylabel('Average Memory Utilization (%)')
+            ax.set_title('Average Memory Utilization by Policy')
+            ax.set_ylim(0, 100) # Since it's a percentage, cap at 100
+            ax.grid(axis='y', linestyle='--', alpha=0.7)
+            
+            plt.tight_layout()
+            plt.savefig('average_utilization_bar.png')
+            plt.clf()
+        except Exception:
+            pass
+
+    # =========================================================================
+    # GRAPH 4: Data Structure Overhead Bar Chart
+    # =========================================================================
+    overhead_filename = 'overhead.csv'
+    if os.path.exists(overhead_filename):
+        try:
+            df_over = pd.read_csv(overhead_filename, header=None, names=['Policy', 'Overhead'])
+            
+            # Clean up Policy names and convert Overhead string (e.g. '1024 bytes') to numeric
+            df_over['Policy'] = df_over['Policy'].str.strip()
+            df_over['Overhead'] = df_over['Overhead'].astype(str).str.replace('bytes', '', case=False).str.strip().astype(float)
+            
+            fig, ax = plt.subplots(figsize=(8, 6))
+            plot_colors = [colors.get(p, 'gray') for p in df_over['Policy']]
+            
+            ax.bar(df_over['Policy'].str.replace('_', ' '), df_over['Overhead'], color=plot_colors, alpha=0.8)
+            ax.set_xlabel('Allocation Policy')
+            ax.set_ylabel('Data Structure Overhead (Bytes)')
+            ax.set_title('Data Structure Overhead by Policy')
+            ax.grid(axis='y', linestyle='--', alpha=0.7)
+            
+            plt.tight_layout()
+            plt.savefig('overhead_bar.png')
+            plt.clf()
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main()

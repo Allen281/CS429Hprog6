@@ -48,5 +48,6 @@ void t_gcollect(void);
 
 void t_display_stats();
 double t_get_usage();
+size_t t_get_ds_overhead();
 
 #endif // TDMM_H

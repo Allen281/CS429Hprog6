@@ -137,4 +137,5 @@ void t_display_stats() {
     printf("Data structure overhead: %zu bytes (%.5f%%)\n", data_structure_overhead, (double)data_structure_overhead / total_size * 100);
 }
 
+size_t t_get_ds_overhead() {return data_structure_overhead;}
 double t_get_usage(){ return (double)requested_size / total_size * 100;}
