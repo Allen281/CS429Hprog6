@@ -46,6 +46,7 @@ def main():
     plt.tight_layout()
     plt.savefig('speed_comparison.png')
     plt.clf()
+    plt.close()
 
     # =========================================================================
     # GRAPH 2: Memory Utilization Over Time
@@ -67,6 +68,7 @@ def main():
     plt.tight_layout()
     plt.savefig('utilization_comparison.png')
     plt.clf()
+    plt.close()
 
     # =========================================================================
     # GRAPH 3: Average Utilization Bar Chart
@@ -80,19 +82,20 @@ def main():
             df_avg['Policy'] = df_avg['Policy'].str.strip()
             df_avg['Utilization'] = df_avg['Utilization'].astype(str).str.replace('%', '').astype(float)
             
-            fig, ax = plt.subplots(figsize=(8, 6))
+            fig, ax = plt.subplots(figsize=(7, 4))
             plot_colors = [colors.get(p, 'gray') for p in df_avg['Policy']]
             
             ax.bar(df_avg['Policy'].str.replace('_', ' '), df_avg['Utilization'], color=plot_colors, alpha=0.8)
             ax.set_xlabel('Allocation Policy')
             ax.set_ylabel('Average Memory Utilization (%)')
             ax.set_title('Average Memory Utilization by Policy')
-            ax.set_ylim(0, 100) # Since it's a percentage, cap at 100
+            ax.set_ylim(0, 100) # Cap at 100 for percentages
             ax.grid(axis='y', linestyle='--', alpha=0.7)
             
             plt.tight_layout()
             plt.savefig('average_utilization_bar.png')
             plt.clf()
+            plt.close()
         except Exception:
             pass
 
@@ -108,18 +111,29 @@ def main():
             df_over['Policy'] = df_over['Policy'].str.strip()
             df_over['Overhead'] = df_over['Overhead'].astype(str).str.replace('bytes', '', case=False).str.strip().astype(float)
             
-            fig, ax = plt.subplots(figsize=(8, 6))
+            # Make the figure more compact
+            fig, ax = plt.subplots(figsize=(7, 4))
             plot_colors = [colors.get(p, 'gray') for p in df_over['Policy']]
             
             ax.bar(df_over['Policy'].str.replace('_', ' '), df_over['Overhead'], color=plot_colors, alpha=0.8)
             ax.set_xlabel('Allocation Policy')
             ax.set_ylabel('Data Structure Overhead (Bytes)')
-            ax.set_title('Data Structure Overhead by Policy')
+            ax.set_title('Data Structure Overhead')
             ax.grid(axis='y', linestyle='--', alpha=0.7)
+            
+            # Zoom in on the Y-axis to show small differences clearly
+            min_val = df_over['Overhead'].min()
+            max_val = df_over['Overhead'].max()
+            diff = max_val - min_val
+            
+            # If there's a difference, pad by 20% of the difference. If they are exactly the same, pad by 5%.
+            padding = diff * 0.5 if diff > 0 else min_val * 0.05
+            ax.set_ylim(max(0, min_val - padding), max_val + padding)
             
             plt.tight_layout()
             plt.savefig('overhead_bar.png')
             plt.clf()
+            plt.close()
         except Exception:
             pass
 
